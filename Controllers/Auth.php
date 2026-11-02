@@ -126,16 +126,16 @@ class Auth extends \CodeIgniter\Controller
 		$this->data['title'] = lang('Auth.login_heading');
 
 		// validate form input
-		$this->validation->setRule('identity', str_replace(':', '', lang('Auth.login_identity_label')), 'required');
-		$this->validation->setRule('password', str_replace(':', '', lang('Auth.login_password_label')), 'required');
+		$this->validation->setRule('identity', str_replace(':', '', lang('Auth.login_identity_label')), 'required|string');
+		$this->validation->setRule('password', str_replace(':', '', lang('Auth.login_password_label')), 'required|string');
 
-		if ($this->request->getPost() && $this->validation->withRequest($this->request)->run())
+		if ($this->request->getPost() && $this->validation->run($this->request->getPost() ?? []))
 		{
 			// check to see if the user is logging in
 			// check for "remember me"
-			$remember = (bool)$this->request->getVar('remember');
+			$remember = (bool)$this->request->getPost('remember');
 
-			if ($this->ionAuth->login($this->request->getVar('identity'), $this->request->getVar('password'), $remember))
+			if ($this->ionAuth->login($this->request->getPost('identity'), $this->request->getPost('password'), $remember))
 			{
 				//if the login is successful
 				//redirect them back to the home page
@@ -148,7 +148,9 @@ class Auth extends \CodeIgniter\Controller
 				// redirect them back to the login page
 				$this->session->setFlashdata('message', $this->ionAuth->errors($this->validationListTemplate));
 				// use redirects instead of loading views for compatibility with MY_Controller libraries
-				return redirect()->back()->withInput();
+				// Only retain the non-secret identity after a failed login.
+				$this->session->setFlashdata('_ci_old_input', ['post' => ['identity' => $this->request->getPost('identity')], 'get' => []]);
+				return redirect()->back();
 			}
 		}
 		else
@@ -203,13 +205,13 @@ class Auth extends \CodeIgniter\Controller
 			return redirect()->to('/auth/login');
 		}
 		
-		$this->validation->setRule('old', lang('Auth.change_password_validation_old_password_label'), 'required');
-		$this->validation->setRule('new', lang('Auth.change_password_validation_new_password_label'), 'required|min_length[' . $this->configIonAuth->minPasswordLength . ']|matches[new_confirm]');
-		$this->validation->setRule('new_confirm', lang('Auth.change_password_validation_new_password_confirm_label'), 'required');
+		$this->validation->setRule('old', lang('Auth.change_password_validation_old_password_label'), 'required|string');
+		$this->validation->setRule('new', lang('Auth.change_password_validation_new_password_label'), 'required|string|min_length[' . $this->configIonAuth->minPasswordLength . ']|matches[new_confirm]');
+		$this->validation->setRule('new_confirm', lang('Auth.change_password_validation_new_password_confirm_label'), 'required|string');
 
 		$user = $this->ionAuth->user()->row();
 
-		if (! $this->request->getPost() || $this->validation->withRequest($this->request)->run() === false)
+		if (! $this->request->getPost() || $this->validation->run($this->request->getPost() ?? []) === false)
 		{
 			// display the form
 			// set the flash data error message if there is one
@@ -275,14 +277,14 @@ class Auth extends \CodeIgniter\Controller
 		// setting validation rules by checking whether identity is username or email
 		if ($this->configIonAuth->identity !== 'email')
 		{
-			$this->validation->setRule('identity', lang('Auth.forgot_password_identity_label'), 'required');
+			$this->validation->setRule('identity', lang('Auth.forgot_password_identity_label'), 'required|string');
 		}
 		else
 		{
-			$this->validation->setRule('identity', lang('Auth.forgot_password_validation_email_label'), 'required|valid_email');
+			$this->validation->setRule('identity', lang('Auth.forgot_password_validation_email_label'), 'required|string|valid_email');
 		}
 
-		if (! ($this->request->getPost() && $this->validation->withRequest($this->request)->run()))
+		if (! ($this->request->getPost() && $this->validation->run($this->request->getPost() ?? [])))
 		{
 			$this->data['type'] = $this->configIonAuth->identity;
 			// setup the input
@@ -306,38 +308,12 @@ class Auth extends \CodeIgniter\Controller
 		}
 		else
 		{
-			$identityColumn = $this->configIonAuth->identity;
-			$identity = $this->ionAuth->where($identityColumn, $this->request->getPost('identity'))->users()->row();
-
-			if (empty($identity))
-			{
-				if ($this->configIonAuth->identity !== 'email')
-				{
-					$this->ionAuth->setError('Auth.forgot_password_identity_not_found');
-				}
-				else
-				{
-					$this->ionAuth->setError('Auth.forgot_password_email_not_found');
-				}
-
-				$this->session->setFlashdata('message', $this->ionAuth->errors($this->validationListTemplate));
-				return redirect()->to('/auth/forgot_password');
-			}
-
-			// run the forgotten password method to email an activation code to the user
-			$forgotten = $this->ionAuth->forgottenPassword($identity->{$this->configIonAuth->identity});
-
-			if ($forgotten)
-			{
-				// if there were no errors
-				$this->session->setFlashdata('message', $this->ionAuth->messages());
-				return redirect()->to('/auth/login'); //we should display a confirmation page here instead of the login page
-			}
-			else
-			{
-				$this->session->setFlashdata('message', $this->ionAuth->errors($this->validationListTemplate));
-				return redirect()->to('/auth/forgot_password');
-			}
+			// Keep the public response identical regardless of account existence or mail status.
+			// Applications must rate-limit this endpoint and provide a delivery handler when
+			// useCiEmail is false. Library return values (including reset secrets) stay private.
+			$this->ionAuth->forgottenPassword($this->request->getPost('identity'));
+			$this->session->setFlashdata('message', lang('Auth.forgot_password_generic'));
+			return redirect()->to('/auth/login');
 		}
 	}
 
@@ -363,10 +339,10 @@ class Auth extends \CodeIgniter\Controller
 		{
 			// if the code is valid then display the password reset form
 
-			$this->validation->setRule('new', lang('Auth.reset_password_validation_new_password_label'), 'required|min_length[' . $this->configIonAuth->minPasswordLength . ']|matches[new_confirm]');
-			$this->validation->setRule('new_confirm', lang('Auth.reset_password_validation_new_password_confirm_label'), 'required');
+			$this->validation->setRule('new', lang('Auth.reset_password_validation_new_password_label'), 'required|string|min_length[' . $this->configIonAuth->minPasswordLength . ']|matches[new_confirm]');
+			$this->validation->setRule('new_confirm', lang('Auth.reset_password_validation_new_password_confirm_label'), 'required|string');
 
-			if (! $this->request->getPost() || $this->validation->withRequest($this->request)->run() === false)
+			if (! $this->request->getPost() || $this->validation->run($this->request->getPost() ?? []) === false)
 			{
 				// display the form
 
@@ -489,10 +465,10 @@ class Auth extends \CodeIgniter\Controller
 			// TODO : I think it could be nice to have a dedicated exception like '\IonAuth\Exception\NotAllowed
 		}
 
-		$this->validation->setRule('confirm', lang('Auth.deactivate_validation_confirm_label'), 'required');
-		$this->validation->setRule('id', lang('Auth.deactivate_validation_user_id_label'), 'required|integer');
+		$this->validation->setRule('confirm', lang('Auth.deactivate_validation_confirm_label'), 'required|string');
+		$this->validation->setRule('id', lang('Auth.deactivate_validation_user_id_label'), 'required|string|integer');
 
-		if (! $this->validation->withRequest($this->request)->run())
+		if (! $this->validation->run($this->request->getPost() ?? []))
 		{
 			$this->data['user'] = $this->ionAuth->user($id)->row();
 			return $this->renderPage($this->viewsFolder . DIRECTORY_SEPARATOR . 'deactivate_user', $this->data);
@@ -543,21 +519,21 @@ class Auth extends \CodeIgniter\Controller
 		$this->trimPostFields(['first_name', 'last_name', 'identity', 'email', 'phone', 'company']);
 
 		// validate form input
-		$this->validation->setRule('first_name', lang('Auth.create_user_validation_fname_label'), 'required');
-		$this->validation->setRule('last_name', lang('Auth.create_user_validation_lname_label'), 'required');
+		$this->validation->setRule('first_name', lang('Auth.create_user_validation_fname_label'), 'required|string');
+		$this->validation->setRule('last_name', lang('Auth.create_user_validation_lname_label'), 'required|string');
 		if ($identityColumn !== 'email')
 		{
-			$this->validation->setRule('identity', lang('Auth.create_user_validation_identity_label'), 'required|is_unique[' . $tables['users'] . '.' . $identityColumn . ']');
-			$this->validation->setRule('email', lang('Auth.create_user_validation_email_label'), 'required|valid_email');
+			$this->validation->setRule('identity', lang('Auth.create_user_validation_identity_label'), 'required|string|is_unique[' . $tables['users'] . '.' . $identityColumn . ']');
+			$this->validation->setRule('email', lang('Auth.create_user_validation_email_label'), 'required|string|valid_email');
 		}
 		else
 		{
-			$this->validation->setRule('email', lang('Auth.create_user_validation_email_label'), 'required|valid_email|is_unique[' . $tables['users'] . '.email]');
+			$this->validation->setRule('email', lang('Auth.create_user_validation_email_label'), 'required|string|valid_email|is_unique[' . $tables['users'] . '.email]');
 		}
-		$this->validation->setRule('password', lang('Auth.create_user_validation_password_label'), 'required|min_length[' . $this->configIonAuth->minPasswordLength . ']|matches[password_confirm]');
-		$this->validation->setRule('password_confirm', lang('Auth.create_user_validation_password_confirm_label'), 'required');
+		$this->validation->setRule('password', lang('Auth.create_user_validation_password_label'), 'required|string|min_length[' . $this->configIonAuth->minPasswordLength . ']|matches[password_confirm]');
+		$this->validation->setRule('password_confirm', lang('Auth.create_user_validation_password_confirm_label'), 'required|string');
 
-		if ($this->request->getPost() && $this->validation->withRequest($this->request)->run())
+		if ($this->request->getPost() && $this->validation->run($this->request->getPost() ?? []))
 		{
 			$email    = strtolower((string) $this->request->getPost('email'));
 			$identity = ($identityColumn === 'email') ? $email : $this->request->getPost('identity');
@@ -570,7 +546,7 @@ class Auth extends \CodeIgniter\Controller
 				'phone'      => $this->request->getPost('phone'),
 			];
 		}
-		if ($this->request->getPost() && $this->validation->withRequest($this->request)->run() && $this->ionAuth->register($identity, $password, $email, $additionalData))
+		if ($this->request->getPost() && $this->validation->run($this->request->getPost() ?? []) && $this->ionAuth->register($identity, $password, $email, $additionalData))
 		{
 			// check to see if we are creating the user
 			// redirect them back to the admin page
@@ -670,16 +646,16 @@ class Auth extends \CodeIgniter\Controller
 		$groups        = $this->ionAuth->groups()->resultArray();
 		$currentGroups = $this->ionAuth->getUsersGroups($id)->getResult();
 
-		if (! empty($_POST))
+		if ($this->request->getPost())
 		{
 			// CodeIgniter 4 validation does not alter the data, so trim before validating.
 			$this->trimPostFields(['first_name', 'last_name', 'phone', 'company']);
 
 			// validate form input
-			$this->validation->setRule('first_name', lang('Auth.edit_user_validation_fname_label'), 'required');
-			$this->validation->setRule('last_name', lang('Auth.edit_user_validation_lname_label'), 'required');
-			$this->validation->setRule('phone', lang('Auth.edit_user_validation_phone_label'), 'required');
-			$this->validation->setRule('company', lang('Auth.edit_user_validation_company_label'), 'required');
+			$this->validation->setRule('first_name', lang('Auth.edit_user_validation_fname_label'), 'required|string');
+			$this->validation->setRule('last_name', lang('Auth.edit_user_validation_lname_label'), 'required|string');
+			$this->validation->setRule('phone', lang('Auth.edit_user_validation_phone_label'), 'required|string');
+			$this->validation->setRule('company', lang('Auth.edit_user_validation_company_label'), 'required|string');
 
 			// do we have a valid request?
 			if ($id !== $this->request->getPost('id', FILTER_VALIDATE_INT))
@@ -691,11 +667,11 @@ class Auth extends \CodeIgniter\Controller
 			// update the password if it was posted
 			if ($this->request->getPost('password'))
 			{
-				$this->validation->setRule('password', lang('Auth.edit_user_validation_password_label'), 'required|min_length[' . $this->configIonAuth->minPasswordLength . ']|matches[password_confirm]');
-				$this->validation->setRule('password_confirm', lang('Auth.edit_user_validation_password_confirm_label'), 'required');
+				$this->validation->setRule('password', lang('Auth.edit_user_validation_password_label'), 'required|string|min_length[' . $this->configIonAuth->minPasswordLength . ']|matches[password_confirm]');
+				$this->validation->setRule('password_confirm', lang('Auth.edit_user_validation_password_confirm_label'), 'required|string');
 			}
 
-			if ($this->request->getPost() && $this->validation->withRequest($this->request)->run())
+			if ($this->request->getPost() && $this->validation->run($this->request->getPost() ?? []))
 			{
 				$data = [
 					'first_name' => $this->request->getPost('first_name'),
@@ -805,12 +781,12 @@ class Auth extends \CodeIgniter\Controller
 		}
 
 		// CodeIgniter 4 validation does not alter the data, so trim before validating.
-		$this->trimPostFields(['group_name', 'description']);
+		$this->trimPostFields(['group_name', 'description', 'group_description']);
 
 		// validate form input
-		$this->validation->setRule('group_name', lang('Auth.create_group_validation_name_label'), 'required|alpha_dash');
+		$this->validation->setRule('group_name', lang('Auth.create_group_validation_name_label'), 'required|string|alpha_dash');
 
-		if ($this->request->getPost() && $this->validation->withRequest($this->request)->run())
+		if ($this->request->getPost() && $this->validation->run($this->request->getPost() ?? []))
 		{
 			$newGroupId = $this->ionAuth->createGroup($this->request->getPost('group_name'), $this->request->getPost('description'));
 			if ($newGroupId)
@@ -867,13 +843,14 @@ class Auth extends \CodeIgniter\Controller
 		}
 
 		$group = $this->ionAuth->group($id)->row();
+		$this->trimPostFields(['group_name', 'group_description']);
 
 		// validate form input
-		$this->validation->setRule('group_name', lang('Auth.edit_group_validation_name_label'), 'required|alpha_dash');
+		$this->validation->setRule('group_name', lang('Auth.edit_group_validation_name_label'), 'required|string|alpha_dash');
 
 		if ($this->request->getPost())
 		{
-			if ($this->validation->withRequest($this->request)->run())
+			if ($this->validation->run($this->request->getPost() ?? []))
 			{
 				$groupUpdate = $this->ionAuth->updateGroup($id, $this->request->getPost('group_name'), ['description' => $this->request->getPost('group_description')]);
 

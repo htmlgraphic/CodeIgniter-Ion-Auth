@@ -20,6 +20,7 @@
  */
 
 return [
+	'forgot_password_generic' => 'If an eligible account matches, password reset instructions will be sent.',
 	// Errors
 	'error_security' => 'This form post did not pass our security checks.',
 

@@ -135,4 +135,23 @@ class RememberSecurityTest extends CIUnitTestCase
         $cookie = service('response')->getCookie(config('IonAuth')->rememberCookieName);
         $this->assertTrue($cookie->isHTTPOnly());
     }
+
+    public function testLogoutSupportsUsernameIdentity(): void
+    {
+        config('IonAuth')->identity = 'username';
+        $this->model = new IonAuthModel();
+        $this->assertTrue($this->model->rememberUser('administrator'));
+        $token = service('response')->getCookie(config('IonAuth')->rememberCookieName)->getValue();
+        $this->assertTrue($this->replay($token));
+        $this->assertTrue((new IonAuth())->logout());
+        $this->assertFalse($this->replay($token));
+    }
+
+    public function testClearedValidatorWithRetainedSelectorFailsClosed(): void
+    {
+        $token = $this->issueToken();
+        $this->model->db()->table(config('IonAuth')->tables['users'])->where('id', 1)->update(['remember_code' => null]);
+        $this->assertFalse($this->replay($token));
+    }
+
 }

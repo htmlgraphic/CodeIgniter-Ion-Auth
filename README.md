@@ -1,4 +1,7 @@
 # Ion Auth 4
+
+This is the [HTMLgraphic maintenance fork](FORK.md) for CI4 4.7.6+ and PHP 8.2+.
+See that document for included fixes, installation, tests, and integration limits.
 ### The future of authentication
 by [Ben Edmunds](http://benedmunds.com)
 

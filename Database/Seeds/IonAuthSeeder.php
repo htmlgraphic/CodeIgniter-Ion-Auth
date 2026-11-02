@@ -7,6 +7,18 @@ namespace IonAuth\Database\Seeds;
 
 class IonAuthSeeder extends \CodeIgniter\Database\Seeder
 {
+	public function __construct(\Config\Database $config, ?\CodeIgniter\Database\BaseConnection $db = null)
+	{
+		// The parent selects the connection during construction, before run().
+		$databaseGroup = trim((string) config('IonAuth')->databaseGroupName);
+		if ($databaseGroup !== '')
+		{
+			$this->DBGroup = $databaseGroup;
+		}
+
+		parent::__construct($config, $db);
+	}
+
 	/**
 	 * Dumping data for table 'groups', 'users, 'users_groups'
 	 *
@@ -15,12 +27,6 @@ class IonAuthSeeder extends \CodeIgniter\Database\Seeder
 	public function run()
 	{
 		$config = config('IonAuth\\Config\\IonAuth');
-
-		$databaseGroup = trim((string) $config->databaseGroupName);
-		if ($databaseGroup !== '')
-		{
-			$this->DBGroup = $databaseGroup;
-		}
 
 		$tables = $config->tables;
 

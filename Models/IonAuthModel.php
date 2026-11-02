@@ -931,7 +931,7 @@ class IonAuthModel
 				if ($user->active == 0)
 				{
 					$this->triggerEvents('post_login_unsuccessful');
-					$this->setError('IonAuth.login_unsuccessful_not_active');
+					$this->setError('IonAuth.login_unsuccessful');
 
 					return false;
 				}
