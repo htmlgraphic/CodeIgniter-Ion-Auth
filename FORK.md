@@ -32,7 +32,7 @@ certification.
 
 Keep the upstream Composer package name for compatibility. Add this fork as a
 VCS repository in the consuming application's root composer.json, then require
-the `dev-4` branch at an explicitly reviewed commit. Commit the application's
+`^4.0@dev` to select branch `4` (normalized as `4.x-dev`). Commit the application's
 lock file so deployment does not silently follow branch changes.
 
 ```json
@@ -41,13 +41,17 @@ lock file so deployment does not silently follow branch changes.
     {"type": "vcs", "url": "https://github.com/htmlgraphic/CodeIgniter-Ion-Auth"}
   ],
   "require": {
-    "benedmunds/codeigniter-ion-auth": "dev-4"
+    "benedmunds/codeigniter-ion-auth": "^4.0@dev"
   }
 }
 ```
 
-For an exact review revision, use `dev-4#<full-commit-sha>` instead. This does not
-replace the consuming application's integration tests or deployment review.
+The application's committed `composer.lock` is the exact revision pin. Review
+its source/dist reference before accepting a dependency update. Use `composer
+install` for reproducible deployments; `composer update` deliberately refreshes
+branch dependencies and requires a fresh review. Raw `#commit` constraints can
+produce strict Composer validation warnings and inconsistent branch metadata.
+This does not replace the consuming application's integration tests or deployment review.
 
 ## Integration boundaries
 
