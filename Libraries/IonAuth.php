@@ -415,9 +415,12 @@ class IonAuth
 	{
 		$this->ionAuthModel->triggerEvents('logout');
 
-		$identity = $this->session->get('user_id');
-		
-		$this->session->remove([$identity, 'id', 'user_id']);
+		// Revocation APIs accept the configured identity, not the numeric user ID.
+		$userId = $this->session->get('user_id');
+		$user = $userId ? $this->ionAuthModel->user((int) $userId)->row() : null;
+		$identity = $user ? $user->{$this->config->identity} : null;
+
+		$this->session->remove(['identity', $this->config->identity, 'email', 'id', 'user_id']);
 
 		// delete the remember me cookies if they exist
 		delete_cookie($this->config->rememberCookieName);

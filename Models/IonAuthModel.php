@@ -1846,6 +1846,13 @@ class IonAuthModel
 
 						return false;
 					}
+
+					// Revoke credentials atomically with profile/admin password changes.
+					$data['remember_selector'] = null;
+					$data['remember_code'] = null;
+					$data['forgotten_password_selector'] = null;
+					$data['forgotten_password_code'] = null;
+					$data['forgotten_password_time'] = null;
 				}
 				else
 				{
@@ -2033,7 +2040,8 @@ class IonAuthModel
 				set_cookie([
 					'name'   => $this->config->rememberCookieName,
 					'value'  => $token->userCode,
-					'expire' => $expire
+					'expire' => $expire,
+					'httponly' => true,
 				]);
 
 				$this->triggerEvents(['post_remember_user', 'remember_user_successful']);
@@ -2056,6 +2064,12 @@ class IonAuthModel
 	public function loginRememberedUser(): bool
 	{
 		$this->triggerEvents('pre_login_remembered_user');
+
+		// Enforce the policy here as well as in the library wrapper.
+		if (! $this->config->rememberUsers)
+		{
+			return false;
+		}
 
 		// Retrieve token from cookie
 		$rememberCookie = get_cookie($this->config->rememberCookieName);
@@ -2083,7 +2097,7 @@ class IonAuthModel
 
 			// Check the code against the validator
 			$identity = $user->{$this->identityColumn};
-			if ($this->verifyPassword($token->validator, $user->remember_code, $identity))
+			if (is_string($user->remember_code) && $this->verifyPassword($token->validator, $user->remember_code, $identity))
 			{
 				$this->updateLastLogin($user->id);
 
@@ -2592,7 +2606,9 @@ class IonAuthModel
 		// When setting a new password, invalidate any other token
 		$data = [
 			'password'                => $hash,
+			'remember_selector'       => null,
 			'remember_code'           => null,
+			'forgotten_password_selector' => null,
 			'forgotten_password_code' => null,
 			'forgotten_password_time' => null,
 		];
